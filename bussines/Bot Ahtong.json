@@ -1,0 +1,226 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "4374d0d3-d29e-4565-978e-7cd7dd835608",
+      "name": "Telegram Trigger",
+      "webhookId": "63a9e061-3ed8-400f-8a26-1aa719e789c0",
+      "credentials": {
+        "telegramApi": {
+          "id": "8yZeQ3hYe2A6yfuk",
+          "name": "BotAhtong2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Berikut data FAQ toko (dari sheet):\n\nTools FAQ_SHEET_CONTENT\n\nPertanyaan pelanggan:\n\"{{ $json.message.text }}\"\n\nCarikan jawaban paling relevan dari data FAQ di atas.  \nJika ada lebih dari satu kemungkinan, pilih yang paling sesuai dengan konteks pertanyaan pelanggan.  \nJika tidak ditemukan jawaban yang cocok, berikan jawaban alami dan ramah dari Bu Ahtong, lalu beri label sumber sebagai \"Manual\".\n",
+        "options": {
+          "systemMessage": "=Kamu adalah \"Bu Ahtong\", asisten virtual dari Toko Kelontong Ahtong — toko sembako dan kebutuhan harian yang terkenal ramah dan jujur di Cirebon.  \nGaya bicaramu seperti ibu-ibu yang sabar, sopan, dan helpful tapi tetap profesional.  \nGunakan bahasa Indonesia yang ringan, tidak kaku, dan terasa seperti ngobrol dengan pelanggan di warung.\n\nKamu memiliki akses ke data FAQ toko dalam bentuk CSV atau Sheet berisi daftar pertanyaan dan jawaban.  \nJika pengguna bertanya tentang harga, stok, promo, atau informasi toko, carilah jawabannya berdasarkan data tersebut.  \nJika tidak ditemukan data yang relevan, jawab dengan sopan bahwa kamu akan bantu cek atau sarankan pelanggan untuk menghubungi admin toko lewat WhatsApp.\n\nOutput **selalu dalam format JSON** berikut:\n\n{\n  \"pesan\": \"isi jawaban singkat dan ramah, 1-2 kalimat saja\",\n  \"sumber\": \"FAQ\" atau \"Manual\" (FAQ jika ditemukan di sheet, Manual jika tidak ditemukan)\n}\n\nContoh:\n{\n  \"pesan\": \"Untuk beras Ramos 5 kg harganya Rp 78.000 ya, Bu. Masih ready juga hari ini 😊\",\n  \"sumber\": \"FAQ\"\n}\n\nNada dan gaya harus:\n- Ramah dan sopan seperti ibu-ibu yang sabar.\n- Tidak terlalu panjang, langsung ke intinya.\n- Jika menjawab harga, sertakan emoji ringan seperti 😊 atau 🛒.\n- Jika tidak ada data, arahkan dengan halus ke admin tanpa memaksa.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "aceb4939-c8bf-4ef7-a7d2-13a4ba7a554e",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        208,
+        144
+      ],
+      "id": "1fd0fa1b-4107-4075-9d4e-b77f112e94cc",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "GORps8KKGaI0aXpt",
+          "name": "Gemini Ahtong2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        304,
+        160
+      ],
+      "id": "02fd5738-55a3-4280-9c21-385e4bf0668d",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1FuCw69NnkXh3epmAdHpmcCNLRuGgVLpvaePXxMdupdM",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "FAQ_Toko_Kelontong_Ahtong_Lengkap",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        416,
+        144
+      ],
+      "id": "7d09eed8-d7fd-4afb-b376-2a416bdf775d",
+      "name": "FAQ_SHEET_CONTENT",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "vPusvv05e12P5bwp",
+          "name": "Gsheet Ahtong"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ambil semua data dari input\nconst items = $input.all();\n\n// Ambil field \"output\" dari hasil AI\nconst raw = items[0].json.output || \"\";\n\n// Bersihkan teks dari ```json dan karakter tambahan\nconst clean = raw\n  .replace(/^```json\\s*/i, '')\n  .replace(/```$/i, '')\n  .trim();\n\n// Coba parse JSON\nlet parsed;\ntry {\n  parsed = JSON.parse(clean);\n} catch (e) {\n  // Kalau gagal parse, fallback ke respons default\n  parsed = {\n    pesan: \"Maaf Bu, datanya belum bisa dibaca dengan benar ya 😊\",\n    sumber: \"Manual\",\n  };\n}\n\n// Pastikan format output sesuai\nreturn [\n  {\n    json: {\n      pesan: parsed.pesan || \"Maaf Bu, belum ada jawaban untuk itu 😊\",\n      sumber: parsed.sumber || \"Manual\",\n    },\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        444,
+        0
+      ],
+      "id": "310d02a5-512e-4374-9739-6be69e688763",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "={{ $json.pesan }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "reply_to_message_id": "={{ $('Telegram Trigger').item.json.message.message_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        656,
+        0
+      ],
+      "id": "187954e2-2e85-4211-8170-eb628e092c00",
+      "name": "Send a text message",
+      "webhookId": "c3a54e94-091b-4abd-8c63-c741d7ccee78",
+      "credentials": {
+        "telegramApi": {
+          "id": "8yZeQ3hYe2A6yfuk",
+          "name": "BotAhtong2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAQ_SHEET_CONTENT": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "aa657f9e-ba3a-4f02-a567-8eb7278cd1b1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "eb8b2109ea2b4fe42480ec1ba04a1f916178be52d231223efddd3bde5cfee4fa"
+  },
+  "id": "SeSyyNbkauN0WlnG",
+  "tags": []
+}
